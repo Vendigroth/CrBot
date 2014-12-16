@@ -41,7 +41,7 @@ class CraigslistScraper:
         #Get the body
         body = ""
         body = soup.find(attrs={'id' : 'postingbody'})
-        body = html2text.html2text(str(body))
+        body = html2text.html2text(str(body).decode("utf8"))
         body = re.sub('\[show contact info\].*\)', '[REDACTED]', body)
         body = body.rstrip('\n')
         
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     
     print "====================="
 
-    url = "http://newyork.craigslist.org/que/ctd/4740686353.html" 
+    url = "http://london.craigslist.co.uk/cto/4782222165.html" 
     
     crs = CraigslistScraper()
     pdt = crs.scrapeUrl(url)
