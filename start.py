@@ -204,7 +204,7 @@ def processSubmission(submission):
 
             ##### make a reply
             imgLink = re.sub('.jpg$', '', imgLink) 
-            commentText = "**" + replyTitle +"**\n\n" + "[Imgur Link](" + imgLink + ")^(^*Post ^body ^in ^description)" + COMMENT_FOOTER
+            commentText = "**" + replyTitle +"**\n\n" + "[Imgur Mirror Link](" + imgLink + ")^(^*Post ^body ^in ^description)" + COMMENT_FOOTER
             print('Replying to ' + pid + ' by ' + pauthor + ':')
             print "======================================"
             print commentText

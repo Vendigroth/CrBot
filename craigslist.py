@@ -4,27 +4,25 @@
 # Grabs text and images from a posting
 
 
-from urllib2 import urlopen, URLError
 from BeautifulSoup import BeautifulSoup
 from HTMLParser import HTMLParser
 from collections import namedtuple
 import html2text
+import requests
 import re
 
 class CraigslistScraper:
-
-    #def __init__(self):
            
     def scrapeUrl(self, url):
 
         html = None
-        try:
-            html = urlopen(url)
-        except URLError as err:
-            print('Error: ' + str(err.code ) + " " + str(err.reason))
-            return
+        try: 
+        	html = requests.get(url)
+        except Exception as err:
+        	print('Error: ' + err)
+        	return
 
-        soup = BeautifulSoup(html)
+        soup = BeautifulSoup(html.text)
         #print(soup.prettify())
         
         description = soup.head.find('meta', {'name':'description'})['content']
@@ -80,7 +78,7 @@ if __name__ == '__main__':
     
     print "====================="
 
-    url = "http://london.craigslist.co.uk/cto/4782222165.html" 
+    url = "http://sfbay.craigslist.org/eby/cto/4812623838.html" 
     
     crs = CraigslistScraper()
     pdt = crs.scrapeUrl(url)
