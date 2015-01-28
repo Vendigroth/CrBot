@@ -15,6 +15,10 @@ class CraigslistScraper:
            
     def scrapeUrl(self, url):
 
+        if ' ' in url:
+            url = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', url)[0]
+            print "\nFixing URL: " + url
+
         html = None
         try: 
         	html = requests.get(url)
@@ -24,25 +28,30 @@ class CraigslistScraper:
 
         soup = BeautifulSoup(html.text)
         #print(soup.prettify())
-        
+
         description = soup.head.find('meta', {'name':'description'})['content']
         if "This posting has expired." in description or "This posting has been flagged for removal." in description or "This posting has been deleted by its author." in description:
             print "Broken: " + description
             return 0
-        
+
         #Get the title
         title = ""
         title = soup.find('h2', attrs={'class':'postingtitle'}).text
         parser = HTMLParser()
         title = parser.unescape(title)
+        # reddit doesn't like ';'
+        title = re.sub(';', '', title)
         
         #Get the body
         body = ""
         body = soup.find(attrs={'id' : 'postingbody'})
         body = html2text.html2text(str(body).decode("utf8"))
-        body = re.sub('\[show contact info\].*\)', '[REDACTED]', body)
-        body = body.rstrip('\n')
-        
+        body = re.sub("(  \n)+", "  \n", body)
+        body = re.sub("(\n\n)+", "\n", body)
+        body = re.sub('\[show\scontact\sinfo\]\((.|\n)*\)', '[REDACTED]', body)
+        body = re.sub(';', ' ', body)
+
+        #print repr(body)
         #body = parser.unescape(body)
         
         #Get all the images
@@ -67,7 +76,10 @@ class CraigslistScraper:
         attributes = []
         for attribute in soup.findAll('p', attrs={'class':'attrgroup'}):
             for span in attribute.findAll('span'):
-                attributes.append(str(span.text))
+                temp_text =  str(span.text)
+                if not 'more ads by this user' in temp_text:
+                    attributes.append(temp_text)
+                
 
         #Pack it up, and send it away
         PageData = namedtuple('PageData', 'title, body, images, attributes')
@@ -78,7 +90,7 @@ if __name__ == '__main__':
     
     print "====================="
 
-    url = "http://sfbay.craigslist.org/eby/cto/4812623838.html" 
+    url = "http://winchester.craigslist.org/rvs/4854199828.html" 
     
     crs = CraigslistScraper()
     pdt = crs.scrapeUrl(url)

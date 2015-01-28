@@ -87,15 +87,17 @@ def scanSub(sub):
     #for submission
 
 def processSubmission(submission):
-    
     pid = submission.id
     pageData = None
     commentText = None
     repost = False
+    pAuthor = "[DELETED]"
     try:
-        pauthor = submission.author.name
+        if submission.author:
+           pAuthor = submission.author.name
+        
         cur.execute('SELECT * FROM oldSubs WHERE ID=?', [pid])
-        if not cur.fetchone():    
+        if not cur.fetchone():   
             print "\nFound a new submission: (" + pid + ") " + submission.title
             print submission.url
 
@@ -156,13 +158,12 @@ def processSubmission(submission):
                     if not pageData:
                         # Post what we have.
                         print "Craigslits post is gone. Just posting the images.\n"
-                        commentText = "**" + replyTitle +"**"  
                         commentText = commentText + "\n\n[Imgur Mirror Link](" + replyLink + ")" 
                         commentText = commentText + COMMENT_FOOTER
                     else:
                         commentText = buildReply(replyLink, pageData)
 
-            print('Replying to ' + pid + ' by ' + pauthor + ':')
+            print('Replying to ' + pid + ' by ' + pAuthor + ':')
             print "======================================"
             print commentText
             print "======================================"
@@ -183,8 +184,6 @@ def processSubmission(submission):
     except RateLimitExceeded as err:
         print "Need to wait a bit.\n"
         return
-    #except AttributeErrors as err:
-    #    pauthor = '[DELETED]'
     except Exception as err:
         print('An error has occured:', err)
 
@@ -302,7 +301,7 @@ def main():
         print "trying a single submission: " + sub   
         submission = reddit.get_submission(submission_id=sub)
         print "Looking at submission: (" + submission.id + ") " + submission.title
-        print submission.url
+        print "URL: " + submission.url + "."
         print ""
         processSubmission(submission)
         sys.exit()
