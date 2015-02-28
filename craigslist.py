@@ -48,7 +48,18 @@ class CraigslistScraper:
         body = html2text.html2text(str(body).decode("utf8"))
         body = re.sub("(  \n)+", "  \n", body)
         body = re.sub("(\n\n)+", "\n", body)
-        body = re.sub('\[show\scontact\sinfo\]\((.|\n)*\)', '[REDACTED]', body)
+        
+        # Get and print contact info just in case. (Might be useful in the future)
+        contact = re.search('\[show\scontact\sinfo\]\((.*?)\)', body)
+        if contact:
+            contactURL = re.sub("\.org/(.*)", ".org"+contact.group(1), url)
+            contact = requests.get(contactURL).text
+            contact = re.search('(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4})', contact)
+            if contact:
+                print "Removing Contact: " + contact.group(1)
+            
+        # Remove contact info.
+        body = re.sub('\[show\scontact\sinfo\]\((.*?)\)', '[REDACTED]', body)
         body = re.sub(';', ' ', body)
 
         #print repr(body)
@@ -88,19 +99,19 @@ class CraigslistScraper:
     
 if __name__ == '__main__':
     
-    print "====================="
 
-    url = "http://winchester.craigslist.org/rvs/4854199828.html" 
+    url = "http://sfbay.craigslist.org/pen/cto/4893152560.html" 
     
     crs = CraigslistScraper()
     pdt = crs.scrapeUrl(url)
 
+    print "====================="
     if pdt:
+        print "Title:"
         print pdt.title
-        print ""
+        print "Body:"
         print pdt.body
-        print ""
-        print "have: " + str(len(pdt.images)) + " images."
+        print "\nHave: " + str(len(pdt.images)) + " images."
         for image in pdt.images:
             print image
         print ""

@@ -31,7 +31,7 @@ USERAGENT = ("Craigslist-Bot .02 by /u/Vendigroth")
 USERNAME = config.get("Reddit", "username")
 PASSWORD = config.get("Reddit", "password")
 SUBREDDIT = config.get("Reddit", "subreddit")
-SUBREDDIT = "coolcarsforsale+cars+autos"
+
 
 # Imgur info
 IMGUR_CID = config.get("Imgur", "clientId")
@@ -102,14 +102,16 @@ def processSubmission(submission):
             print submission.url
 
             #For testing/ first load.
-            #contVal = raw_input("Continue? (y/n)")
-            #if contVal == '' or contVal.lower() == "y":
-            #    print "Cont"
-            #else:
-            #    print "Skipping"
-            #    cur.execute('INSERT INTO oldSubs VALUES(?)', [pid])
-            #    sql.commit()
-            #    return
+            TestMode = False
+            if TestMode:
+                contVal = raw_input("Continue? (y/n)")
+                if contVal == '' or contVal.lower() == "y":
+                    print "Cont"
+                else:
+                    print "Skipping"
+                    cur.execute('INSERT INTO oldSubs VALUES(?)', [pid])
+                    sql.commit()
+                    return
             
             # If it's a direct image link... ignore it. 
             if "http://images.craigslist.org/" in submission.url:
