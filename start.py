@@ -1,45 +1,66 @@
-#!/usr/bin/env python
+#!/usr/bin/python -u
 #
 # search.py
 # Does the reddit search/post part of the bot.
 
+import os
 import sys
 import time
+import datetime
 import signal
 import sqlite3
 import ConfigParser
 import re
-import urllib
+import requests
 import pyimgur
 import praw
+from PIL import Image
+from StringIO import StringIO
 from praw.errors import ExceptionList, APIException, InvalidCaptcha, InvalidUser, RateLimitExceeded
 import craigslist
 
+##############################
+# Return a pretty timestamp
+##############################
+def ts():
+    return datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')+" "
+##############################
+# For catching SIGINT
+##############################
 def signal_handler(signal, frame):
-    print 'Bye!'
+    print ts(),'Bye!'
     sys.exit(0)
 
+WD = "/home/pi/CrBot/"
 ##############################
 # Globals
 ##############################
 # Config file
 config = ConfigParser.ConfigParser()
-config.read("CraigslistBot.cfg")
+config.read(WD+"craigslistBot.cfg")
 
 # Reddit info
 USERAGENT = ("Craigslist-Bot .02 by /u/Vendigroth")
 USERNAME = config.get("Reddit", "username")
 PASSWORD = config.get("Reddit", "password")
 SUBREDDIT = config.get("Reddit", "subreddit")
-
+#SUBREDDIT = "test"
 
 # Imgur info
 IMGUR_CID = config.get("Imgur", "clientId")
 IMGUR_SECRET = config.get("Imgur", "clientSecret")
 
+# Push info If there is no section it will be ignored.
+PUSHOVER = False
+if config.has_section("Pushover"):
+    PUSHOVER = True
+    PUSH_TOKEN = config.get("Pushover", "token")
+    PUSH_USER = config.get("Pushover", "user")
+
 # Bot info
 MAXPOSTS = config.get("Bot", "maxposts") # 100 is max.
 WAIT = float(config.get("Bot", "sleeptime"))
+ERROR_WAIT = 10
 
 COMMENT_FOOTER = """
 \n --- 
@@ -55,8 +76,8 @@ COMMENT_FOOTER = """
 reddit = praw.Reddit(user_agent = USERAGENT)
 im = pyimgur.Imgur(IMGUR_CID)
 
-sql = sqlite3.connect('sql.db')
-print('Loaded SQL Database')
+sql = sqlite3.connect(WD+'sql.db')
+print ts(),'Loaded SQL Database'
 cur = sql.cursor()
 
 # SQL
@@ -64,19 +85,54 @@ cur.execute('CREATE TABLE IF NOT EXISTS oldSubs(ID TEXT)')
 cur.execute('CREATE TABLE IF NOT EXISTS clImage2imgurPic(clist TEXT , imgur TEXT)')
 cur.execute('CREATE TABLE IF NOT EXISTS clLink2postData(clist TEXT, albumlink TEXT, commentlink TEXT)')
 
-print('Loaded Completed table')
+print ts(),'Loaded Completed table'
 
 sql.commit()
 
 crs = craigslist.CraigslistScraper()
 
+ERROR = False
+ERROR_COUNT = 0
+ERROR_RETRY_TIMES = 2
+
+##############################
+# Send a push notification
+##############################
+def send_push(message,**kwargs):
+    if not PUSHOVER:
+        return
+
+    if not message:
+        print ts(),"Nope. Need a message."
+        return
+
+    payload = {'token':PUSH_TOKEN,'user':PUSH_USER,'message':message}
+    
+    if kwargs is not None:
+        for key, value in kwargs.iteritems():
+            payload[key] = value
+
+    url = 'https://api.pushover.net/1/messages.json'
+    r = requests.post(url, data=payload)
+    if r.status_code != 200:
+        print ts(),"Push Error: ",r.status_code
+        print r.text
+    
+
+##############################
+# Check connection to reddit
+##############################
+def have_connection():
+    try:
+        response=requests.get('http://www.reddit.com/', timeout=7)
+        return True
+    except requests.ConnectionError as err: pass
+    return False
+
 ##############################
 # Scan a single sub (or a few with '+')
 ##############################
 def scanSub(sub):
-
-    #Too many loop prints. add proper logging?
-    #print('Searching '+ sub + '.')
 
     subreddit = reddit.get_subreddit(sub)
     
@@ -84,7 +140,6 @@ def scanSub(sub):
     
     for submission in submissions:
         processSubmission(submission)
-    #for submission
 
 def processSubmission(submission):
     pid = submission.id
@@ -98,12 +153,12 @@ def processSubmission(submission):
         
         cur.execute('SELECT * FROM oldSubs WHERE ID=?', [pid])
         if not cur.fetchone():   
-            print "\nFound a new submission: (" + pid + ") " + submission.title
-            print submission.url
+            print ts(),"\nFound a new submission: (" + pid + ") " + submission.title
+            print ts(),submission.url
 
             #For testing/ first load.
-            TestMode = False
-            if TestMode:
+            TEST_MODE = False
+            if TEST_MODE:
                 contVal = raw_input("Continue? (y/n)")
                 if contVal == '' or contVal.lower() == "y":
                     print "Cont"
@@ -115,7 +170,7 @@ def processSubmission(submission):
             
             # If it's a direct image link... ignore it. 
             if "http://images.craigslist.org/" in submission.url:
-                print "Direct image link. Skipping.\n"
+                print ts(),"Direct image link. Skipping.\n"
                 cur.execute('INSERT INTO oldSubs VALUES(?)', [pid])
                 return
 
@@ -128,13 +183,19 @@ def processSubmission(submission):
                 pageData = crs.scrapeUrl(submission.url)
 
                 if not pageData:
-                    print "Craigslits post is gone.\n"
+                    print ts(),"Craigslits post is gone.\n"
                     cur.execute('INSERT INTO oldSubs VALUES(?)', [pid])
                     return
-                
+
+                upload_tries = 0
                 replyLink = getImgurLink(submission.url, pageData.images, pageData.title)
+                while not replyLink and upload_tries < 2:
+                    upload_tries += 1
+                    print ts(),"Messed up album. Trying again"
+                    replyLink = getImgurLink(submission.url, pageData.images, pageData.title)
                 if not replyLink:
-                    print "Messed up album\n"
+                    print ts(),"Can't Upload\n"
+                    ERROR = True
                     return
                 
                 # Now have CL -> imgur pictures done. Deal with text.
@@ -147,7 +208,7 @@ def processSubmission(submission):
                 # Already posted this one. re use old comment as a whole.
                 if commentLink:
                     commentLink = str(commentLink)
-                    print "Repost! using old text from permalink:\n" + commentLink
+                    print ts(),"Repost! using old text from permalink:\n" + commentLink
                     s = reddit.get_submission(commentLink)
                     oldComment = s.comments[0] # might want to handle out of range if comment can be deleted. 
                     commentText = "[x-post/repost:](" + commentLink + ")\n\n" + oldComment.body
@@ -155,39 +216,49 @@ def processSubmission(submission):
                 else:
                 # Have an image, but no text.
                 # Still try to scrape, but no need to deal with images.
-                    print "Just images"
+                    print ts(),"Just images"
                     pageData = crs.scrapeUrl(submission.url)
                     if not pageData:
                         # Post what we have.
-                        print "Craigslits post is gone. Just posting the images.\n"
+                        print ts(),"Craigslits post is gone. Just posting the images.\n"
                         commentText = commentText + "\n\n[Imgur Mirror Link](" + replyLink + ")" 
                         commentText = commentText + COMMENT_FOOTER
                     else:
                         commentText = buildReply(replyLink, pageData)
 
-            print('Replying to ' + pid + ' by ' + pAuthor + ':')
-            print "======================================"
-            print commentText
-            print "======================================"
+            print ts(),"Replying to ", pid, " by ", pAuthor 
+
+            #Verbose stuff
+            #print "======================================"
+            #print commentText
+            #print "======================================"
             
             comment = submission.add_comment(commentText)
 
-            if comment and not repost:
-                # Save permaling for a future repost. 
-                print "Permalink " + comment.permalink
-                print "Updating " + submission.url + " with " + comment.permalink
-                cur.execute ('UPDATE clLink2postData SET commentlink=? WHERE clist=?', [comment.permalink, submission.url])
-            
+            if comment:
+                # Save permalink for a future repost. 
+                print ts(),"Permalink ", comment.permalink               
+                if repost:
+                    # Send a push notification with a link. (Curiosity)
+                    send_push(submission.title,url="http://redd.it/"+pid,url_title="Repost")
+                else:
+                    print ts(),"Updating ", submission.url, " with ", comment.permalink
+                    cur.execute ('UPDATE clLink2postData SET commentlink=? WHERE clist=?', [comment.permalink, submission.url])
+                    # This one has more info.
+                    send_push(submission.title,url="http://redd.it/"+pid,url_title=pageData.title)
+
             # no errors? - dont look at it again.
-            print "Inserting " + pid
+            print ts(),"Inserting ", pid
             cur.execute('INSERT INTO oldSubs VALUES(?)', [pid])
             sql.commit()
 
     except RateLimitExceeded as err:
-        print "Need to wait a bit.\n"
+        print ts(),"Need to wait a bit."
         return
     except Exception as err:
-        print('An error has occured:', err)
+        print ts(),'An error has occured:', err
+        if have_connection():
+            send_push(err,title="Bot Error")
 
 def getImgurLink(url, images, title):
 
@@ -197,11 +268,11 @@ def getImgurLink(url, images, title):
     numImages = len(images)
     if numImages == 0:
         # No images. Need a way to handle that. Screenshot? not quite mobile fiiendly.
-        print "No images. Not sure what to do.\n"
+        print ts(),"No images. Not sure what to do."
         return None
         
     if numImages > 0:
-        print 'Have ' + str(numImages) + ' images'
+        print ts(),'Have ', numImages, ' images'
         imgrImages = []
         for clImage in images: 
             # Clist seems to reuse image id's when post is re-posted
@@ -215,27 +286,34 @@ def getImgurLink(url, images, title):
                 # No saved image
                 # Looks like craigslist doesn't let imgur to grab pics directly. meanies.
                 # ok, download it, upload it, db it.
-                print "Downloading: " + clImage
-                urllib.urlretrieve(clImage, "temp.jpg")
-                
+                print ts(),"Downloading: ", clImage
+                r = requests.get(clImage)
+                if r.status_code != 200:
+                    print ts(), "Download Error: ", r.status_code
+                    print ts(),r.text
+                i = Image.open(StringIO(r.content))
+                i.save(WD+"temp.jpg")
+                print ts(),"Downloaded"
                 # Handle 0/1/many picture differences.
+
                 try:
                     if numImages == 1:
-                        print "Uploading 1"
-                        imgrImage = im.upload_image(path="temp.jpg",title=shortTitle)#,description=pageData.body)
+                        print ts(),"Uploading 1"
+                        imgrImage = im.upload_image(path=WD+"temp.jpg",title=shortTitle)#,description=pageData.body)
                         replyLink = imgrImage.link
                     else:
-                        imgrImage = im.upload_image(path="temp.jpg")
+                        imgrImage = im.upload_image(path=WD+"temp.jpg")
                         imgrImages.append(imgrImage)
                 except Exception as err:
-                    print('Upload error: ', err)
+                    print ts(),"Upload error: ", err
+                    return None
                 
-                print "Uploaded to: " + imgrImage.link
+                print ts(),"Uploaded to: ", imgrImage.link
                 cur.execute('INSERT INTO clImage2imgurPic VALUES(?,?)', [clImage,imgrImage.id])
                 
             else:
                 imgrImage = im.get_image(str(row[0]))
-                print "Re-using image: " + imgrImage.link
+                print ts(),"Re-using image: ", imgrImage.link
                 imgrImages.append(imgrImage)
         
         if numImages == 1:
@@ -243,17 +321,17 @@ def getImgurLink(url, images, title):
             replyLink = imgrImage.link             
         elif numImages > 1:
             #create an album
-            print "Making an album"
+            print ts(),"Making an album"
             imgAlbum = im.create_album(title=shortTitle, images=imgrImages)
             print imgAlbum
-            print "Album has :" + str(len(imgAlbum.images)) + "/" + str(numImages) + " images."
+            print ts(),"Album has :", len(imgAlbum.images), "/", numImages, " images."
             if len(imgAlbum.images) != numImages:
-                print "No good."
+                print ts(),"No good."
                 return None
             replyLink = imgAlbum.link   
     cur.execute('INSERT INTO clLink2postData VALUES(?,?,?)', [url,replyLink,None])
     sql.commit()
-    print "Saved link: " + replyLink
+    print ts(),"Saved link: ", replyLink
 
     # not sure if need for RES anymore. Used to chop so RES would follow.
     replyLink = re.sub('.jpg$', '', replyLink) 
@@ -294,31 +372,49 @@ def buildReply(replyLink, pageData):
 ##############################
 
 def main():
+    #Check for internet/reddit connection first.
+    while not have_connection():
+        print ts(),"No internet connection available. Waiting ", WAIT
+        time.sleep(WAIT)
+
+    send_push("Bot Started")
 
     reddit.login(USERNAME, PASSWORD)
     
     if len(sys.argv) > 1:
         
         sub = str(sys.argv[1])
-        print "trying a single submission: " + sub   
+        print "trying a single submission: ", sub   
         submission = reddit.get_submission(submission_id=sub)
-        print "Looking at submission: (" + submission.id + ") " + submission.title
-        print "URL: " + submission.url + "."
+        print "Looking at submission: (", submission.id, ") ", submission.title
+        print "URL: ", submission.url, "."
         print ""
         processSubmission(submission)
         sys.exit()
 
-    print "Starting in search mode."
-    print "Scanning : " + SUBREDDIT + " every " + str(WAIT/60) + " min."
+    print ts(),"Starting in search mode."
+    print ts(),"Scanning : " + SUBREDDIT + " every ", WAIT/60, " min."
     while True:
         try:
             #Scan sub submissions only. (for now) 
             scanSub(SUBREDDIT)
         except Exception as err:
-           print('An error has occured:', err)
+            print ts(),'An error has occured:', err
+            if have_connection():
+                send_push(err,title="Bot Error")
+            else:
+                while not have_connection():
+                    print ts(),"No connection. Waiting until it's back"
+                    time.sleep(WAIT)
+
         #print('Running again in ' + str(WAIT) + ' seconds \n')
         sql.commit()
-        time.sleep(WAIT)
+        if not ERROR:
+            time.sleep(WAIT)
+            ERROR_COUNT = 0
+        elif ERROR_COUNT < ERROR_RETRY_TIMES:
+            print ts(),'Error! Trying again.'
+            time.sleep(ERROR_WAIT)
 
 ##############################
 # Go Go Go!
