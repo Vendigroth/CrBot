@@ -17,7 +17,7 @@ class CraigslistScraper:
 
         if ' ' in url:
             url = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', url)[0]
-            print "\nFixing URL: " + url
+            print "\nFixing URL: " + url 
 
         html = None
         try: 
@@ -36,7 +36,11 @@ class CraigslistScraper:
 
         #Get the title
         title = ""
-        title = soup.find('h2', attrs={'class':'postingtitle'}).text
+        title = soup.find('h2', attrs={'class':'postingtitle'})
+        if not title:
+            print "There's no title"
+            return 0
+        title = title.text
         parser = HTMLParser()
         title = parser.unescape(title)
         # reddit doesn't like ';'
@@ -52,6 +56,7 @@ class CraigslistScraper:
         # Get and print contact info just in case. (Might be useful in the future)
         contact = re.search('\[show\scontact\sinfo\]\((.*?)\)', body)
         if contact:
+            contactURL = re.sub("\.ca/(.*)", ".ca"+contact.group(1), url)
             contactURL = re.sub("\.org/(.*)", ".org"+contact.group(1), url)
             contact = requests.get(contactURL).text
             contact = re.search('(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4})', contact)
@@ -100,7 +105,7 @@ class CraigslistScraper:
 if __name__ == '__main__':
     
 
-    url = "http://sfbay.craigslist.org/pen/cto/4893152560.html" 
+    url = "http://craigslist.org/" 
     
     crs = CraigslistScraper()
     pdt = crs.scrapeUrl(url)

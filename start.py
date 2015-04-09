@@ -60,7 +60,7 @@ if config.has_section("Pushover"):
 # Bot info
 MAXPOSTS = config.get("Bot", "maxposts") # 100 is max.
 WAIT = float(config.get("Bot", "sleeptime"))
-ERROR_WAIT = 10
+ERROR_WAIT = 30
 
 COMMENT_FOOTER = """
 \n --- 
@@ -173,7 +173,6 @@ def processSubmission(submission):
                 print ts(),"Direct image link. Skipping.\n"
                 cur.execute('INSERT INTO oldSubs VALUES(?)', [pid])
                 return
-
             # First check if saw that link before (x-post/repost/re-re-repost)
             cur.execute('SELECT * FROM clLink2postData WHERE clist=?', [submission.url])
             row = cur.fetchone()
@@ -188,15 +187,20 @@ def processSubmission(submission):
                     return
 
                 upload_tries = 0
-                replyLink = getImgurLink(submission.url, pageData.images, pageData.title)
-                while not replyLink and upload_tries < 2:
-                    upload_tries += 1
-                    print ts(),"Messed up album. Trying again"
+                if len(pageData.images) != 0:
                     replyLink = getImgurLink(submission.url, pageData.images, pageData.title)
-                if not replyLink:
-                    print ts(),"Can't Upload\n"
-                    ERROR = True
-                    return
+                    while not replyLink and upload_tries < 2:
+                        upload_tries += 1
+                        print ts(),"Messed up album. Trying again"
+                        replyLink = getImgurLink(submission.url, pageData.images, pageData.title)
+                    if not replyLink:
+                        print ts(),"Can't Upload\n"
+                        ERROR = True
+                        return
+                else:
+                    send_push("Got No images.")
+                    replyLink = None
+
                 
                 # Now have CL -> imgur pictures done. Deal with text.
                 commentText = buildReply(replyLink, pageData)
@@ -251,6 +255,8 @@ def processSubmission(submission):
             print ts(),"Inserting ", pid
             cur.execute('INSERT INTO oldSubs VALUES(?)', [pid])
             sql.commit()
+            ERROR = False
+
 
     except RateLimitExceeded as err:
         print ts(),"Need to wait a bit."
@@ -359,7 +365,8 @@ def buildReply(replyLink, pageData):
 
     # make a reply from parts
     commentText = "**" + replyTitle +"**" 
-    commentText = commentText + "\n\n[Imgur Mirror Link](" + replyLink + ")"
+    if replyLink:
+        commentText = commentText + "\n\n[Imgur Mirror Link](" + replyLink + ")"
     commentText = commentText + "\n\n" + replyBody
     commentText = commentText + "\n\n" + "&nbsp;"
     if replyTable:
