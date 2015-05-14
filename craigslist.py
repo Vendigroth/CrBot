@@ -5,6 +5,7 @@
 
 
 from BeautifulSoup import BeautifulSoup
+from urlparse import urlparse
 from HTMLParser import HTMLParser
 from collections import namedtuple
 import html2text
@@ -25,7 +26,8 @@ class CraigslistScraper:
         except Exception as err:
         	print('Error: ' + err)
         	return
-
+        encoding = html.encoding
+        #print encoding
         soup = BeautifulSoup(html.text)
         #print(soup.prettify())
 
@@ -45,30 +47,34 @@ class CraigslistScraper:
         title = parser.unescape(title)
         # reddit doesn't like ';'
         title = re.sub(';', '', title)
-        
-        #Get the body
-        body = ""
-        body = soup.find(attrs={'id' : 'postingbody'})
-        body = html2text.html2text(str(body).decode("utf8"))
-        body = re.sub("(  \n)+", "  \n", body)
-        body = re.sub("(\n\n)+", "\n", body)
-        
+
         # Get and print contact info just in case. (Might be useful in the future)
-        contact = re.search('\[show\scontact\sinfo\]\((.*?)\)', body)
-        if contact:
-            contactURL = re.sub("\.ca/(.*)", ".ca"+contact.group(1), url)
-            contactURL = re.sub("\.org/(.*)", ".org"+contact.group(1), url)
-            contact = requests.get(contactURL).text
+        contact_ref = soup.find('a', "showcontact", href=True)
+        if contact_ref:
+            parsed_uri = urlparse(url)
+            domain = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
+            contact_url = domain + contact_ref['href']
+            contact = requests.get(contact_url).text
             contact = re.search('(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4})', contact)
             if contact:
-                print "Removing Contact: " + contact.group(1)
-            
-        # Remove contact info.
-        body = re.sub('\[show\scontact\sinfo\]\((.*?)\)', '[REDACTED]', body)
-        body = re.sub(';', ' ', body)
+              print "Removing Contact: " + contact.group(1)
+           
+        #Get the body
+        body = ""
+        body = soup.find(attrs={'id' : 'postingbody'}).renderContents()
+        body = html2text.html2text(body.decode('utf8')).encode('utf-8')
 
-        #print repr(body)
-        #body = parser.unescape(body)
+        # Remove contact info ref.
+        body = re.sub('\[show\scontact\sinfo\]\((.*?)\)', '[REDACTED]', body)
+        
+        #print body
+        # Reddit formatting tweaks
+        body = re.sub("(  \n)+", "  \n", body)
+        body = re.sub("(\n\n)+", "\n", body)
+        body = '>'.join(('\n'+body.lstrip()).splitlines(True))
+        body = re.sub("(\n)+", "\n\n", body)
+
+        body = re.sub(';', ' ', body)
         
         #Get all the images
         images = []
@@ -92,7 +98,8 @@ class CraigslistScraper:
         attributes = []
         for attribute in soup.findAll('p', attrs={'class':'attrgroup'}):
             for span in attribute.findAll('span'):
-                temp_text =  str(span.text)
+                temp_text =  span.text
+                temp_text = parser.unescape(temp_text)
                 if not 'more ads by this user' in temp_text:
                     attributes.append(temp_text)
                 
@@ -105,8 +112,8 @@ class CraigslistScraper:
 if __name__ == '__main__':
     
 
-    url = "http://craigslist.org/" 
-    
+    url = "http://newjersey.craigslist.org/cto/4993219302.html"
+
     crs = CraigslistScraper()
     pdt = crs.scrapeUrl(url)
 

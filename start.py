@@ -221,7 +221,12 @@ def processSubmission(submission):
                 # Have an image, but no text.
                 # Still try to scrape, but no need to deal with images.
                     print ts(),"Just images"
-                    pageData = crs.scrapeUrl(submission.url)
+                    try:
+                        pageData = crs.scrapeUrl(submission.url)
+                    except Exception as err:
+                        print ts(),'An error has occured:', err
+                        if have_connection():
+                            send_push(err,title="Bot Scrape Error")
                     if not pageData:
                         # Post what we have.
                         print ts(),"Craigslits post is gone. Just posting the images.\n"
@@ -229,7 +234,6 @@ def processSubmission(submission):
                         commentText = commentText + COMMENT_FOOTER
                     else:
                         commentText = buildReply(replyLink, pageData)
-
             print ts(),"Replying to ", pid, " by ", pAuthor 
 
             #Verbose stuff
@@ -350,9 +354,8 @@ def buildReply(replyLink, pageData):
     commentText = None
     
     replyTitle = pageData.title
-    # Chop it at completely arbitrary 2k chars. 
-    replyBody = (pageData.body[:2000] + '...') if len(pageData.body) > 2000 else pageData.body
-    replyBody = ">" + replyBody
+    # Chop it at completely arbitrary 7k chars. 
+    replyBody = (pageData.body[:7000] + '...') if len(pageData.body) > 7000 else pageData.body
     # make a table out of attributes. 
     if pageData.attributes:
         replyTable = ''
@@ -364,14 +367,17 @@ def buildReply(replyLink, pageData):
                 tabled = True
 
     # make a reply from parts
-    commentText = "**" + replyTitle +"**" 
+    commentText = "**" + replyTitle +"**"
     if replyLink:
-        commentText = commentText + "\n\n[Imgur Mirror Link](" + replyLink + ")"
-    commentText = commentText + "\n\n" + replyBody
-    commentText = commentText + "\n\n" + "&nbsp;"
+        commentText += "\n\n[Imgur Mirror Link](" + replyLink + ")"
+    commentText += "\n\n"
+    commentText = commentText.encode("utf-8")
+    commentText += replyBody
+    commentText += "\n\n".encode('utf8') + "&nbsp;".encode('utf8')
     if replyTable:
-        commentText = commentText + "\n\n" + replyTable
-    commentText = commentText + COMMENT_FOOTER
+        commentText += "\n\n".encode('utf8')
+        commentText += replyTable.encode('utf8')
+    commentText += COMMENT_FOOTER.encode('utf8')
     return commentText
 
 ##############################
@@ -384,7 +390,6 @@ def main():
         print ts(),"No internet connection available. Waiting ", WAIT
         time.sleep(WAIT)
 
-    send_push("Bot Started")
 
     reddit.login(USERNAME, PASSWORD)
     
@@ -398,6 +403,8 @@ def main():
         print ""
         processSubmission(submission)
         sys.exit()
+    else:
+        send_push("Bot Started")
 
     print ts(),"Starting in search mode."
     print ts(),"Scanning : " + SUBREDDIT + " every ", WAIT/60, " min."
