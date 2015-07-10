@@ -1,3 +1,3 @@
 Craiglist-bot
 -----------------------
-Bot that grabs (currently only) craigslist posts, copies them over to imgur, and replies with the link.
+Bot that looks through a list of subreddits, grabs direct craigslist posts, copies them over to imgur, and replies with text of the post and the link to the album.
