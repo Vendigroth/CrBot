@@ -182,7 +182,7 @@ def processSubmission(submission):
                 pageData = crs.scrapeUrl(submission.url)
 
                 if not pageData:
-                    print ts(),"Craigslits post is gone.\n"
+                    print ts(),"Craigslits post is gone/invalid.\n"
                     cur.execute('INSERT INTO oldSubs VALUES(?)', [pid])
                     return
 
