@@ -20,6 +20,9 @@ class CraigslistScraper:
             url = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', url)[0]
             print "\nFixing URL: " + url 
 
+        if "about/best" in url:
+        	print "URL:",url,"seems to be in 'best', ignoring."
+        	return 0
         html = None
         try: 
         	html = requests.get(url)
@@ -112,7 +115,7 @@ class CraigslistScraper:
 if __name__ == '__main__':
     
 
-    url = "http://newjersey.craigslist.org/cto/4993219302.html"
+    url = "https://www.craigslist.org/about/best/nsh/5195301129.html"
 
     crs = CraigslistScraper()
     pdt = crs.scrapeUrl(url)
