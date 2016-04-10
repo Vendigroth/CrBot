@@ -34,9 +34,13 @@ class CraigslistScraper:
         soup = BeautifulSoup(html.text)
         #print(soup.prettify())
 
-        description = soup.head.find('meta', {'name':'description'})['content']
-        if "This posting has expired." in description or "This posting has been flagged for removal." in description or "This posting has been deleted by its author." in description:
-            print "Broken: " + description
+        description = soup.head.find('meta', {'name':'description'})
+
+        if (not description or
+        	"This posting has expired." in description['content'] or 
+        	"This posting has been flagged for removal." in description['content'] or 
+        	"This posting has been deleted by its author." in description['content']):
+            print "Broken"
             return 0
 
         #Get the title
@@ -116,7 +120,7 @@ class CraigslistScraper:
 if __name__ == '__main__':
     
 
-    url = "https://newyork.craigslist.org/que/cto/5518251476.html"
+    url = "http://newyork.craigslist.org/brx/cto/5508185707.html"
 
     crs = CraigslistScraper()
     pdt = crs.scrapeUrl(url)
