@@ -41,7 +41,7 @@ config = ConfigParser.ConfigParser()
 config.read(WD+"craigslistBot.cfg")
 
 # Reddit info
-USERAGENT = ("Craigslist-Bot .02 by /u/Vendigroth")
+USERAGENT = ("Craigslist-Boot .03 by /u/Vendigroth")
 USERNAME = config.get("Reddit", "username")
 PASSWORD = config.get("Reddit", "password")
 SUBREDDITS = config.get("Reddit", "subreddit")
@@ -138,13 +138,12 @@ def have_connection():
 # Scan a single sub (or a few with '+')
 ##############################
 def scanSub(sub):
-    print ts(),sub + ":"
     subreddit = reddit.get_subreddit(sub)
     submissions = subreddit.search("site:\'craigslist\'",sort="new")
     for submission in submissions:
-        processSubmission(submission)
+        processSubmission(submission, sub)
 
-def processSubmission(submission):
+def processSubmission(submission, sub):
     pid = submission.id
     pAuthor = "[DELETED]"
     try:
@@ -153,7 +152,7 @@ def processSubmission(submission):
         
         cur.execute('SELECT * FROM oldSubs WHERE ID=?', [pid])
         if not cur.fetchone():   
-            print ts(),"\nFound a new submission: (" + pid + ") " + submission.title
+            print ts(),"\nFound a new submission: (" + pid + ") " + submission.title + " in " + sub
             print ts(),submission.url
 
             #For testing/ first load.
