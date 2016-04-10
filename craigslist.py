@@ -67,9 +67,10 @@ class CraigslistScraper:
         body = soup.find(attrs={'id' : 'postingbody'}).renderContents()
         body = html2text.html2text(body.decode('utf8')).encode('utf-8')
 
+        #print body
         # Remove contact info ref.
-        body = re.sub('\[show\scontact\sinfo\]\((.*?)\)', '[REDACTED]', body)
-        
+        body = re.sub('\[show\scontact\sinfo\]\([^)]*\)', '[REDACTED]', body)
+        print body
         #print body
         # Reddit formatting tweaks
         body = re.sub("(  \n)+", "  \n", body)
@@ -115,7 +116,7 @@ class CraigslistScraper:
 if __name__ == '__main__':
     
 
-    url = "https://www.craigslist.org/about/best/nsh/5195301129.html"
+    url = "https://newyork.craigslist.org/que/cto/5518251476.html"
 
     crs = CraigslistScraper()
     pdt = crs.scrapeUrl(url)
