@@ -70,7 +70,7 @@ ERROR_WAIT = 30
 COMMENT_FOOTER = """
 \n --- 
 ^| ^I'm ^a ^bot \
-^| ^For ^bug ^reports ^or ^suggestions [^message ^/u/Vendigroth](http://www.reddit.com/message/compose/?to=Vendigroth) \
+^| ^For ^bug ^reports, ^suggestions, ^or ^if ^you ^want ^me ^in ^your ^sub [^message ^/u/Vendigroth](http://www.reddit.com/message/compose/?to=Vendigroth) \
 ^|"""
 
 
@@ -146,15 +146,15 @@ def scanSub(sub):
 def processSubmission(submission, sub):
     pid = submission.id
     pAuthor = "[DELETED]"
+
     try:
         if submission.author:
            pAuthor = submission.author.name
         
         cur.execute('SELECT * FROM oldSubs WHERE ID=?', [pid])
-        if not cur.fetchone():   
-            print ts(),"\nFound a new submission: (" + pid + ") " + submission.title + " in " + sub
+        if not cur.fetchone():
+            print ts(),"\nFound a new submission: (" + pid + ") " + submission.title.encode('ascii', 'ignore') + " in " + sub
             print ts(),submission.url
-
             #For testing/ first load.
             TEST_MODE = False
             if TEST_MODE:
@@ -178,7 +178,7 @@ def processSubmission(submission, sub):
 
                 if comment:
                     # Save permalink for a future repost. 
-                    print ts(),"Permalink ", comment.permalink
+                    print ts(),"Permalink ", comment.permalink.encode('ascii', 'ignore')
                     if not repost:
                         cur.execute ('UPDATE clLink2postData SET commentlink=? WHERE clist=?', [comment.permalink, submission.url])
                     
@@ -191,12 +191,21 @@ def processSubmission(submission, sub):
                 sql.commit()
                 ERROR = False
 
+    except praw.errors.APIException, exception:
+		if exception.error_type in ('TOO_OLD', 'DELETED_LINK','THREAD_LOCKED'):
+			print ts(),"Cant post: " + exception.error_type
+			cur.execute('INSERT INTO oldSubs VALUES(?)', [pid])
+			sql.commit()
+			return
+		else:
+			raise
 
     except RateLimitExceeded as err:
         print ts(),"Need to wait a bit."
         return
     except Exception as err:
         print ts(),'An error has occured:', err
+        print err.args
         if have_connection():
             send_push(err,title="Bot Error")
 
@@ -263,6 +272,8 @@ def getCommentTextFromUrl(table,pid,url):
                 pageData = crs.scrapeUrl(url)
             except Exception as err:
                 print ts(),'An error has occured:', err
+                print err.args
+                print "=("
                 if have_connection():
                     send_push(err,title="Bot Scrape Error")
             if not pageData:
@@ -421,10 +432,13 @@ def main():
         for subreddit in SUBREDDITS:
             try: 
                 scanSub(subreddit)
+            except praw.errors.HTTPException as err:
+                print ts(),'An HTTP error has occured:', err
             except Exception as err:
                 print ts(),'An error has occured:', err
+                print err.args
                 if have_connection():
-                    send_push(err,title="Error in " + subreddit)
+                    end_push(err,title="Error in " + subreddit)
                 else:
                     while not have_connection():
                         print ts(),"No connection. Waiting until it's back"

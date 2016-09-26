@@ -20,8 +20,16 @@ class CraigslistScraper:
             url = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', url)[0]
             print "\nFixing URL: " + url 
 
+        if len(url) <= 30:
+        	print "Too short"
+        	return 0
+
         if "about/best" in url:
         	print "URL:",url,"seems to be in 'best', ignoring."
+        	return 0
+
+        if ".org/search" in url:
+        	print "URL:",url,"seems to be in 'search', ignoring."
         	return 0
         html = None
         try: 
@@ -45,11 +53,14 @@ class CraigslistScraper:
 
         #Get the title
         title = ""
-        title = soup.find('h2', attrs={'class':'postingtitle'})
+        titleThing = soup.find('span', attrs={'class':'postingtitletext'})
+        for a in titleThing:
+            if "Tag" in str(type(a)) and not "hide this postingrestore this posting" in a.text:
+                title += " " + a.text
+
         if not title:
             print "There's no title"
             return 0
-        title = title.text
         parser = HTMLParser()
         title = parser.unescape(title)
         # reddit doesn't like ';'
@@ -120,7 +131,7 @@ class CraigslistScraper:
 if __name__ == '__main__':
     
 
-    url = "http://newyork.craigslist.org/brx/cto/5508185707.html"
+    url = "http://orangecounty.craigslist.org/search/jjj?sort=rel&query=musician"
 
     crs = CraigslistScraper()
     pdt = crs.scrapeUrl(url)
