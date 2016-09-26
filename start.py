@@ -438,7 +438,7 @@ def main():
                 print ts(),'An error has occured:', err
                 print err.args
                 if have_connection():
-                    end_push(err,title="Error in " + subreddit)
+                	send_push(err,title="Error in " + subreddit)
                 else:
                     while not have_connection():
                         print ts(),"No connection. Waiting until it's back"
