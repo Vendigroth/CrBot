@@ -21,22 +21,27 @@ class CraigslistScraper:
             print "\nFixing URL: " + url 
 
         if len(url) <= 30:
-        	print "Too short"
-        	return 0
+            print "Too short"
+            return 0
+
+        if "//images." in url:
+            print "URL:",url,"seems to 'images', ignoring."
+            return 0
 
         if "about/best" in url:
-        	print "URL:",url,"seems to be in 'best', ignoring."
-        	return 0
+            print "URL:",url,"seems to be in 'best', ignoring."
+            return 0
 
-        if ".org/search" in url:
-        	print "URL:",url,"seems to be in 'search', ignoring."
-        	return 0
+        if "/search/" in url:
+            print "URL:",url,"seems to be in 'search', ignoring."
+            return 0
         html = None
         try: 
-        	html = requests.get(url)
+            html = requests.get(url)
         except Exception as err:
-        	print('Error: ' + err)
-        	return
+            print'Error: '
+            print err
+            return -1
         encoding = html.encoding
         #print encoding
         soup = BeautifulSoup(html.text)
@@ -45,9 +50,9 @@ class CraigslistScraper:
         description = soup.head.find('meta', {'name':'description'})
 
         if (not description or
-        	"This posting has expired." in description['content'] or 
-        	"This posting has been flagged for removal." in description['content'] or 
-        	"This posting has been deleted by its author." in description['content']):
+            "This posting has expired." in description['content'] or 
+            "This posting has been flagged for removal." in description['content'] or 
+            "This posting has been deleted by its author." in description['content']):
             print "Broken"
             return 0
 
@@ -55,7 +60,7 @@ class CraigslistScraper:
         title = ""
         titleThing = soup.find('span', attrs={'class':'postingtitletext'})
         for a in titleThing:
-            if "Tag" in str(type(a)) and not "hide this postingrestore this posting" in a.text:
+            if "Tag" in str(type(a)) and not "hide this" in a.text:
                 title += " " + a.text
 
         if not title:
@@ -83,10 +88,11 @@ class CraigslistScraper:
         body = html2text.html2text(body.decode('utf8')).encode('utf-8')
 
         #print body
+        # Remove qr code stuff
+        body = re.sub('QR Code Link to This Post', '', body)
         # Remove contact info ref.
         body = re.sub('\[show\scontact\sinfo\]\([^)]*\)', '[REDACTED]', body)
-        print body
-        #print body
+
         # Reddit formatting tweaks
         body = re.sub("(  \n)+", "  \n", body)
         body = re.sub("(\n\n)+", "\n", body)
@@ -129,10 +135,7 @@ class CraigslistScraper:
         return pdt
     
 if __name__ == '__main__':
-    
-
-    url = "http://orangecounty.craigslist.org/search/jjj?sort=rel&query=musician"
-
+    url = "https://newyork.craigslist.org/brk/cto/6044568835.html"
     crs = CraigslistScraper()
     pdt = crs.scrapeUrl(url)
 
@@ -147,6 +150,6 @@ if __name__ == '__main__':
             print image
         print ""
         for attr in pdt.attributes:
-            print attr
+           print attr
     else:
         print "oops. post is gone"
