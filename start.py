@@ -225,13 +225,17 @@ def getCommentTextFromUrl(table,pid,url):
     if not row:
         # No saved album/image. 
         # craigslist grab
+        print ts(),"Scraping.\n"
         pageData = crs.scrapeUrl(url)
+        print ts(),"Done.\n"
 
         if not pageData:
             print ts(),"Craigslits post is gone/invalid.\n"
             cur.execute('INSERT INTO '+table+' VALUES(?)', [pid])
             return (None, None, None)
-
+        if pageData == -1:
+            print ts(),"Craigslits error.\n"
+            return (None, None, None)
         upload_tries = 0
         if len(pageData.images) != 0:
             replyLink = getImgurLink(url, pageData.images, pageData.title)
@@ -244,7 +248,7 @@ def getCommentTextFromUrl(table,pid,url):
                 ERROR = True
                 return (None, None, None)
         else:
-            send_push("Got No images.")
+            #send_push("Got No images.")
             replyLink = None
         
         # Now have CL -> imgur pictures done. Deal with text.
@@ -313,6 +317,7 @@ def getImgurLink(url, images, title):
                 # No saved image
                 #Try to upload it directly
                 try:
+                    print ts(),"Uploading " + clImage
                     if numImages == 1:
                         imgrImage = im.upload_image(url=clImage,title=shortTitle)
                     else:
@@ -330,17 +335,18 @@ def getImgurLink(url, images, title):
                         print ts(),"Downloaded"
 
                         if numImages == 1:
-                            imgrImage = im.upload_image(path=WD+"temp.jpg",title=shortTitle)#,description=pageData.body)
+                            imgrImage, test = im.upload_image(path=WD+"temp.jpg",title=shortTitle)#,description=pageData.body)
                         else:
-                            imgrImage = im.upload_image(path=WD+"temp.jpg")
+                            imgrImage, test = im.upload_image(path=WD+"temp.jpg")
 
                     imgrImages.append(imgrImage)
-
                 except Exception as err:
                     print ts(),"Upload error: ", err
+                    time.sleep(60)
                     return None
                 
                 print ts(),"Uploaded to: ", imgrImage.link
+                time.sleep(30)
                 cur.execute('INSERT INTO clImage2imgurPic VALUES(?,?)', [clImage,imgrImage.id])
                 
             else:
